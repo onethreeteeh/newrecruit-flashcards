@@ -178,14 +178,24 @@
             
             currentIndex = index;
             const card = cards[currentIndex];
+            const flashcard = document.getElementById('flashcard');
             
+            // Always update the front content immediately
             document.getElementById('front-content').textContent = card.front;
-            document.getElementById('back-content').textContent = card.back;
             document.getElementById('counter').textContent = `${currentIndex + 1} / ${cards.length}`;
             
-            // Reset flip state
+            // Reset flip state if flipped
             if (isFlipped) {
-                flipCard();
+                flashcard.classList.remove('flipped');
+                isFlipped = false;
+                
+                // Wait for the flip animation to complete, then update back content
+                setTimeout(() => {
+                    document.getElementById('back-content').textContent = card.back;
+                }, 600); // Match the transition duration in CSS
+            } else {
+                // If not flipped, update back content immediately
+                document.getElementById('back-content').textContent = card.back;
             }
         }
 

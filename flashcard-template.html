@@ -77,6 +77,9 @@
         .card-back .card-content {
             font-size: 48px;
             font-weight: bold;
+            max-height: 100%;
+            overflow-y: auto;
+            width: 100%;
         }
         .counter {
             text-align: center;
@@ -191,11 +194,43 @@
                 
                 // Wait for the flip animation to complete, then update back content
                 setTimeout(() => {
-                    document.getElementById('back-content').textContent = card.back;
+                    updateBackContent(card.back);
                 }, 600); // Match the transition duration in CSS
             } else {
                 // If not flipped, update back content immediately
-                document.getElementById('back-content').textContent = card.back;
+                updateBackContent(card.back);
+            }
+        }
+
+        function updateBackContent(text) {
+            const backContent = document.getElementById('back-content');
+            backContent.textContent = text;
+            
+            // Dynamically scale font size to fit content
+            scaleTextToFit(backContent);
+        }
+
+        function scaleTextToFit(element) {
+            const container = element.parentElement;
+            let fontSize = 48; // Starting font size
+            const minFontSize = 10; // Minimum font size in pixels
+            const padding = 30;
+
+            
+            element.style.fontSize = fontSize + 'px';
+            element.style.overflowY = 'hidden';
+            
+            // Reduce font size until content fits or minimum is reached
+            while (element.scrollHeight > container.clientHeight  - padding && fontSize > minFontSize) {
+                fontSize -= 2;
+                element.style.fontSize = fontSize + 'px';
+            }
+            
+            // If still doesn't fit at minimum size, enable scrolling
+            if (element.scrollHeight > container.clientHeight) {
+                element.style.overflowY = 'auto';
+            } else {
+                element.style.overflowY = 'hidden';
             }
         }
 

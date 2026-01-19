@@ -121,15 +121,13 @@
     <div style="display: none;">
         <units>
             <profiles>
-                <if field="profile.name" type="not-equals" value="Leader">
-                    <characteristics>
-                        <div class="card-data" 
-                             data-front="{{unit.name}}" 
-                             data-profile="{{profile.name}}"
-                             data-char="{{name}}"
-                             data-back="{{value}}"></div>
-                    </characteristics>
-                </if>
+                <characteristics>
+                    <div class="card-data" 
+                         data-front="{{unit.name}}" 
+                         data-profile="{{profile.name}}"
+                         data-char="{{name}}"
+                         data-back="{{value}}"></div>
+                </characteristics>
             </profiles>
         </units>
     </div>
@@ -163,12 +161,15 @@
                 
                 return {
                     front: frontText,
-                    back: value
+                    back: value,
+                    profileName: profileName,
+                    charName: charName,
+                    value: value
                 };
             }).filter(card => {
-                // Filter out Leader profiles
-                const cardEl = cardElements[cards.length];
-                return cardEl && cardEl.getAttribute('data-profile') !== 'Leader';
+                // Filter out Leader profiles, melee ranges, and empty keywords for weapons
+
+                return (card.profileName !== 'Leader' && !(card.charName=="Keywords" && card.value =="-") && !(card.charName == "Range" && card.value =="Melee"));
             });
             
             if (cards.length > 0) {

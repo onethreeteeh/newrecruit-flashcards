@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+    <title>Anki Package Generator</title>
+    <style>
+        body { font-family: sans-serif; text-align: center; padding: 40px; background: #f4f7f6; }
+        .box { background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.1); display: inline-block; width: 100%; max-width: 450px; }
+        #status { margin: 20px 0; padding: 12px; border-radius: 6px; font-size: 14px; background: #e3f2fd; color: #1565c0; }
+        button { padding: 15px 30px; font-size: 16px; background: #4CAF50; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; width: 100%; }
+        button:disabled { background: #ccc; cursor: not-allowed; }
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.8.0/sql-wasm.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+</head>
+<body>
+    <div class="box">
+        <h2>Unit Card Exporter</h2>
+        <div id="status">Initializing SQL Engine...</div>
+        <button id="genBtn" onclick="runExport()">Generate .apkg File</button>
+    </div>
+
+    <div style="display:none"> 
+        <units><profiles><characteristics>
+            <div class="card-data" 
+                 data-front="{{unit.name}}" 
+                 data-profile="{{profile.name}}"
+                 data-char="{{name}}"
+                 data-back="{{value}}"></div>
+        </characteristics></profiles></units>
+    </div>
+
+    <script type="text/javascript">
+        //<![CDATA[
+        let SQL;
+        
+        initSqlJs({
+            locateFile: file => `https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.8.0/${file}`
+        }).then(sql => {
+            SQL = sql;
+            document.getElementById('status').innerText = 'Ready to generate.';
+        });
+
+        function getFilteredCards() {
+            const els = document.querySelectorAll('.card-data');
+            return Array.from(els).map(el => {
+                const u = el.getAttribute('data-front'), p = el.getAttribute('data-profile'), c = el.getAttribute('data-char'), v = el.getAttribute('data-back');
+                let f = u;
+                if (p && p !== u && p !== 'Leader') f += ' | ' + p;
+                if (c && c !== 'Description') f += ' | ' + c;
+                return [f, v, p, c];
+            }).filter(x => (x[2] !== 'Leader' && !(x[3] === "Keywords" && x[1] === "-") && !(x[3] === "Range" && x[1] === "Melee")));
+        }
+
+        async function runExport() {
+            const btn = document.getElementById('genBtn');
+            const stat = document.getElementById('status');
+            if (!SQL) return alert('SQL.js still loading...');
+
+            try {
+                btn.disabled = true;
+                const cards = getFilteredCards();
+                if (cards.length === 0) throw new Error("No data found to export.");
+                
+                stat.innerText = `Generating ${cards.length} cards...`;
+                
+                const db = new SQL.Database();
+                const timestamp = Date.now();
+                const deckId = timestamp;
+                const deckName = "Unit Characteristics";
+
+                // Schema Creation
+                db.run(`CREATE TABLE col (id integer PRIMARY KEY, crt integer NOT NULL, mod integer NOT NULL, scm integer NOT NULL, ver integer NOT NULL, dty integer NOT NULL, usn integer NOT NULL, ls integer NOT NULL, conf text NOT NULL, models text NOT NULL, decks text NOT NULL, dconf text NOT NULL, tags text NOT NULL)`);
+                db.run(`CREATE TABLE notes (id integer PRIMARY KEY, guid text NOT NULL, mid integer NOT NULL, mod integer NOT NULL, usn integer NOT NULL, tags text NOT NULL, flds text NOT NULL, sfld text NOT NULL, csum integer NOT NULL, flags integer NOT NULL, data text NOT NULL)`);
+                db.run(`CREATE TABLE cards (id integer PRIMARY KEY, nid integer NOT NULL, did integer NOT NULL, ord integer NOT NULL, mod integer NOT NULL, usn integer NOT NULL, type integer NOT NULL, queue integer NOT NULL, due integer NOT NULL, ivl integer NOT NULL, factor integer NOT NULL, reps integer NOT NULL, lapses integer NOT NULL, left integer NOT NULL, odue integer NOT NULL, odid integer NOT NULL, flags integer NOT NULL, data text NOT NULL)`);
+                db.run(`CREATE TABLE revlog (id integer PRIMARY KEY, cid integer NOT NULL, usn integer NOT NULL, ease integer NOT NULL, ivl integer NOT NULL, lastIvl integer NOT NULL, factor integer NOT NULL, time integer NOT NULL, type integer NOT NULL)`);
+                db.run(`CREATE TABLE graves (usn integer NOT NULL, oid integer NOT NULL, type integer NOT NULL)`);
+                
+                // Collection Data
+                const col = {
+                    id: deckId, crt: Math.floor(timestamp / 1000), mod: timestamp, scm: timestamp, ver: 11, dty: 0, usn: 0, ls: 0,
+                    conf: JSON.stringify({nextPos: 1, estTimes: true, activeDecks: [1], sortType: "noteFld", timeLim: 0, sortBackwards: false, addToCur: true, curDeck: 1, newBury: true, newSpread: 0, dueCounts: true, curModel: timestamp, collapseTime: 1200}),
+                    models: JSON.stringify({
+                        [timestamp]: {
+                            id: timestamp, name: "Basic", type: 0, mod: Math.floor(timestamp / 1000), usn: 0, sortf: 0, did: null,
+                            tmpls: [{name: "Card 1", ord: 0, qfmt: "{{Front}}", afmt: "{{FrontSide}}\n\n<hr id=answer>\n\n{{Back}}", bqfmt: "", bafmt: "", did: null}],
+                            flds: [{name: "Front", ord: 0, sticky: false, rtl: false, font: "Arial", size: 20}, {name: "Back", ord: 1, sticky: false, rtl: false, font: "Arial", size: 20}],
+                            css: ".card { font-family: arial; font-size: 20px; text-align: center; color: black; background-color: white; }",
+                            latexPre: "\\documentclass[12pt]{article}\\special{papersize=3in,5in}\\usepackage[utf8]{inputenc}\\usepackage{amssymb,amsmath}\\pagestyle{empty}\\setlength{\\parindent}{0in}\\begin{document}",
+                            latexPost: "\\end{document}",
+                            latexsvg: false, req: [[0, "any", [0]]]
+                        }
+                    }),
+                    decks: JSON.stringify({[deckId]: {id: deckId, name: deckName, desc: "", mod: timestamp, usn: 0, collapsed: false, browserCollapsed: false, newToday: [0, 0], revToday: [0, 0], lrnToday: [0, 0], timeToday: [0, 0], dyn: 0, extendNew: 10, extendRev: 50, conf: 1}}),
+                    dconf: JSON.stringify({1: {id: 1, name: "Default", mod: 0, usn: 0, maxTaken: 60, autoplay: true, timer: 0, replayq: true, new: {delays: [1, 10], ints: [1, 4, 7], initialFactor: 2500, separate: true, order: 1, perDay: 20, bury: false}, lapse: {delays: [10], mult: 0, minInt: 1, leechFails: 8, leechAction: 0}, rev: {perDay: 200, ease4: 1.3, fuzz: 0.05, minSpace: 1, ivlFct: 1, maxIvl: 36500, bury: false, hardFactor: 1.2}}}),
+                    tags: JSON.stringify({})
+                };
+                
+                db.run(`INSERT INTO col VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, [col.id, col.crt, col.mod, col.scm, col.ver, col.dty, col.usn, col.ls, col.conf, col.models, col.decks, col.dconf, col.tags]);
+
+                cards.forEach((card, i) => {
+                    const nid = timestamp + i + 1;
+                    const guid = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+                        const r = Math.random() * 16 | 0;
+                        return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);
+                    });
+                    
+                    db.run(`INSERT INTO notes VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, [nid, guid, timestamp, Math.floor(Date.now() / 1000), 0, "", card[0] + "\x1f" + card[1], "", 0, 0, ""]);
+                    db.run(`INSERT INTO cards VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, [nid, nid, deckId, 0, Math.floor(Date.now() / 1000), 0, 0, 0, Math.floor(Date.now() / 1000), 0, 0, 0, 0, 0, 0, 0, 0, ""]);
+                });
+
+                const zip = new JSZip();
+                zip.file("collection.anki2", db.export());
+                zip.file("media", "{}");
+                
+                const content = await zip.generateAsync({type: "blob"});
+                const a = document.createElement('a');
+                a.href = URL.createObjectURL(content);
+                a.download = `Unit_Cards.apkg`;
+                a.click();
+                
+                stat.innerText = "Export Complete!";
+                db.close();
+            } catch (err) {
+                stat.innerText = "Error: " + err.message;
+            } finally {
+                btn.disabled = false;
+            }
+        }
+        //]]>
+    </script>
+</body>
+</html>
